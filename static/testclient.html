@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RT-Comms Test Client</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 820px; margin: 1.5rem auto; padding: 0 1rem; }
+    fieldset { margin-bottom: 1rem; }
+    #chat {
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      padding: 0.75rem;
+      min-height: 280px;
+      max-height: 420px;
+      overflow-y: auto;
+      background: #f8f8f8;
+    }
+    .turn { margin: 0.5rem 0; max-width: 85%; }
+    .turn.mine { margin-left: auto; text-align: right; }
+    .turn.theirs { margin-right: auto; text-align: left; }
+    .turn.system { margin: 0.75rem auto; max-width: 100%; text-align: center; }
+    .bubble {
+      display: inline-block;
+      padding: 0.5rem 0.75rem;
+      border-radius: 12px;
+      text-align: left;
+      word-break: break-word;
+    }
+    .mine .bubble { background: #2563eb; color: #fff; }
+    .theirs .bubble { background: #fff; border: 1px solid #ddd; color: #111; }
+    .system .bubble { background: #eee; color: #444; font-size: 0.85rem; }
+    .label { font-size: 0.7rem; color: #666; margin-bottom: 0.15rem; }
+    .line-data {
+      margin-top: 0.35rem;
+      font-size: 0.7rem;
+      font-family: ui-monospace, monospace;
+      color: #555;
+      white-space: pre-wrap;
+      text-align: left;
+    }
+    .line-ack { margin-top: 0.25rem; font-size: 0.75rem; color: #15803d; }
+    .mine .line-ack { text-align: right; }
+    .divider { border: 0; border-top: 1px dashed #ccc; margin: 0.65rem 0; }
+    .call-card {
+      display: inline-flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      padding: 0.65rem 0.85rem;
+      border-radius: 12px;
+      border: 1px solid #d4d4d8;
+      background: #fff;
+      min-width: 200px;
+      max-width: 280px;
+      text-align: left;
+    }
+    .mine .call-card {
+      background: #eff6ff;
+      border-color: #93c5fd;
+    }
+    .theirs .call-card {
+      background: #fff;
+    }
+    .call-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 1.1rem;
+    }
+    .call-card.voice .call-icon { background: #dbeafe; color: #1d4ed8; }
+    .call-card.video .call-icon { background: #ede9fe; color: #6d28d9; }
+    .call-body { flex: 1; min-width: 0; }
+    .call-title { font-weight: 600; font-size: 0.9rem; color: #111; }
+    .call-sub { font-size: 0.8rem; color: #52525b; margin-top: 0.15rem; }
+    .call-meta { font-size: 0.7rem; color: #71717a; margin-top: 0.35rem; }
+    .call-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      padding: 0.12rem 0.45rem;
+      border-radius: 999px;
+      margin-top: 0.35rem;
+    }
+    .call-badge.completed { background: #dcfce7; color: #166534; }
+    .call-badge.missed { background: #fef3c7; color: #92400e; }
+    .call-badge.rejected { background: #fee2e2; color: #991b1b; }
+    .call-event {
+      display: inline-block;
+      font-size: 0.8rem;
+      color: #71717a;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      background: #f4f4f5;
+    }
+    #log {
+      border: 1px solid #ddd;
+      padding: 0.5rem;
+      height: 100px;
+      overflow-y: auto;
+      font-size: 0.75rem;
+      font-family: ui-monospace, monospace;
+      color: #444;
+      margin-top: 0.5rem;
+    }
+    .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    input, button { margin: 0.2rem; }
+    #incomingCall {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #incomingCall.show { display: flex; }
+    .ring-card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 1.5rem 2rem;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+    }
+    .ring-card h2 { margin: 0 0 0.5rem; }
+    .ring-actions { margin-top: 1.25rem; display: flex; gap: 0.75rem; justify-content: center; }
+    .ring-actions button { padding: 0.6rem 1.25rem; font-size: 1rem; cursor: pointer; }
+    #acceptBtn { background: #16a34a; color: #fff; border: none; border-radius: 8px; }
+    #rejectBtn { background: #dc2626; color: #fff; border: none; border-radius: 8px; }
+    #callStatus { font-size: 0.9rem; color: #444; margin-top: 0.5rem; }
+    #remoteAudio { width: 100%; margin-top: 0.5rem; }
+    #videoPanel {
+      display: none;
+      margin-top: 0.75rem;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #18181b;
+      gap: 4px;
+      max-height: 360px;
+    }
+    #videoPanel.show {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+    #videoPanel video {
+      flex: 1;
+      min-width: 0;
+      width: 50%;
+      aspect-ratio: 4 / 3;
+      max-height: 360px;
+      object-fit: cover;
+      background: #27272a;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <h1>RT-Comms Test Client</h1>
+  <audio id="remoteAudio" autoplay playsinline controls></audio>
+  <div id="videoPanel" aria-label="Video call">
+    <video id="localVideo" autoplay playsinline muted title="You"></video>
+    <video id="remoteVideo" autoplay playsinline title="Peer"></video>
+  </div>
+  <div id="incomingCall" aria-live="polite">
+    <div class="ring-card">
+      <h2>Incoming call</h2>
+      <p id="ringFrom"></p>
+      <p id="ringMedia"></p>
+      <div class="ring-actions">
+        <button type="button" id="acceptBtn">Accept</button>
+        <button type="button" id="rejectBtn">Decline</button>
+      </div>
+    </div>
+  </div>
+  <fieldset>
+    <legend>Connection</legend>
+    <div class="row">
+      <label>User <input id="userId" value="alice" /></label>
+      <label>Peer <input id="peer" value="bob" /></label>
+      <label>STUN <input id="stun" value="stun:stun.l.google.com:19302" size="36" /></label>
+    </div>
+    <div class="row">
+      <button id="connectBtn">Connect</button>
+      <button id="disconnectBtn" disabled>Disconnect</button>
+      <button id="historyBtn" disabled>Load history</button>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Chat</legend>
+    <div id="chat"></div>
+    <div class="row" style="margin-top: 0.5rem;">
+      <input id="text" placeholder="Type a message…" size="40" />
+      <button id="sendBtn" disabled>Send</button>
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Calls</legend>
+    <p id="callStatus">No active call</p>
+    <button id="voiceBtn" disabled>Voice</button>
+    <button id="videoBtn" disabled>Video</button>
+    <button id="hangupBtn" disabled>Hangup</button>
+  </fieldset>
+  <details>
+    <summary>Debug log</summary>
+    <div id="log"></div>
+  </details>
+  <script>
+    const chatEl = document.getElementById('chat');
+    const logEl = document.getElementById('log');
+    const log = (m) => { logEl.textContent += m + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+
+    let ws, pc, callId, localStream, remoteStream, pendingOffer, pendingMedia, incomingFrom, activeCallMedia;
+    let callState = 'idle';
+    let lastMineTurn = null;
+    const seenMessageIds = new Set();
+    const iceQueue = [];
+    const pendingLocalIce = [];
+    let ringTimer = null;
+
+    const me = () => document.getElementById('userId').value.trim();
+    const peer = () => document.getElementById('peer').value.trim();
+
+    const wsURL = () => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      return `${proto}//${location.host}/ws?user=${encodeURIComponent(me())}`;
+    };
+
+    const historyURL = () =>
+      `/users/${encodeURIComponent(me())}/direct/${encodeURIComponent(peer())}/messages?limit=50`;
+
+    const send = (obj) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify(obj));
+      dbg('=>', obj);
+    };
+
+    const dbg = (prefix, obj) => log(prefix + ' ' + (typeof obj === 'string' ? obj : JSON.stringify(obj)));
+
+    function setCallStatus(text) {
+      document.getElementById('callStatus').textContent = text;
+    }
+
+    function setHangupEnabled(on) {
+      document.getElementById('hangupBtn').disabled = !on;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function lineData(obj) {
+      if (!obj || (typeof obj === 'object' && Object.keys(obj).length === 0)) return '';
+      return '<div class="line-data">' + escapeHtml(JSON.stringify(obj, null, 2)) + '</div>';
+    }
+
+    function lineAck() {
+      return '<div class="line-ack">delivered</div>';
+    }
+
+    function lineMessage(label, text) {
+      return `<div class="label">${escapeHtml(label)}</div><div class="bubble">${escapeHtml(text || '(no text)')}</div>`;
+    }
+
+    function parseMetadata(raw) {
+      if (!raw) return null;
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw); } catch { return null; }
+      }
+      if (typeof raw === 'object') return raw;
+      return null;
+    }
+
+    function isCallType(type) {
+      return type === 'voice' || type === 'video';
+    }
+
+    function formatDuration(sec) {
+      const n = Number(sec) || 0;
+      if (n <= 0) return '';
+      const m = Math.floor(n / 60);
+      const s = n % 60;
+      return m > 0 ? `${m}:${String(s).padStart(2, '0')}` : `${s}s`;
+    }
+
+    function formatWhen(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      } catch { return ''; }
+    }
+
+    function callStatusLabel(status) {
+      switch (status) {
+        case 'completed': return 'Completed';
+        case 'missed': return 'Missed';
+        case 'rejected': return 'Declined';
+        default: return status || 'Call';
+      }
+    }
+
+    function callIcon(type) {
+      return type === 'video' ? '▶' : '☎';
+    }
+
+    function callCardHtml(msg) {
+      const from = msg.sender || '?';
+      const kind = from === me() ? 'mine' : 'theirs';
+      const type = msg.message_type || 'voice';
+      const meta = parseMetadata(msg.metadata) || {};
+      const status = meta.status || 'completed';
+      const media = meta.media || type;
+      const dur = formatDuration(meta.duration_sec);
+      const direction = kind === 'mine' ? 'Outgoing' : 'Incoming';
+      const mediaLabel = media === 'video' ? 'Video call' : 'Voice call';
+      const when = formatWhen(msg.created_at);
+
+      let sub = direction + ' · ' + callStatusLabel(status).toLowerCase();
+      if (dur && status === 'completed') sub += ' · ' + dur;
+
+      return {
+        kind,
+        html: `
+          <div class="label">${escapeHtml(from)} · ${escapeHtml(mediaLabel)}</div>
+          <div class="call-card ${escapeHtml(media)}">
+            <div class="call-icon" aria-hidden="true">${callIcon(media)}</div>
+            <div class="call-body">
+              <div class="call-title">${escapeHtml(mediaLabel)}</div>
+              <div class="call-sub">${escapeHtml(sub)}</div>
+              <span class="call-badge ${escapeHtml(status)}">${escapeHtml(callStatusLabel(status))}</span>
+              ${when ? `<div class="call-meta">${escapeHtml(when)}</div>` : ''}
+            </div>
+          </div>`,
+      };
+    }
+
+    function showCallTurn(msg) {
+      const id = msg.id;
+      if (id && seenMessageIds.has(id)) return;
+      if (id) seenMessageIds.add(id);
+      const card = callCardHtml(msg);
+      lastMineTurn = null;
+      appendTurn(card.kind, card.html);
+    }
+
+    function showCallEvent(label) {
+      lastMineTurn = null;
+      appendTurn('system', `<div class="call-event">${escapeHtml(label)}</div>`);
+    }
+
+    function appendDivider() {
+      chatEl.appendChild(Object.assign(document.createElement('hr'), { className: 'divider' }));
+    }
+
+    function appendTurn(kind, innerHtml) {
+      const wrap = document.createElement('div');
+      wrap.className = 'turn ' + kind;
+      wrap.innerHTML = innerHtml;
+      chatEl.appendChild(wrap);
+      appendDivider();
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return wrap;
+    }
+
+    function appendToTurn(turnEl, html) {
+      if (!turnEl) return appendTurn('mine', html);
+      turnEl.insertAdjacentHTML('beforeend', html);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return turnEl;
+    }
+
+    function showMessageTurn(msg, opts = {}) {
+      const type = msg.message_type || 'text';
+      if (isCallType(type)) {
+        showCallTurn(msg);
+        return;
+      }
+      const id = msg.id;
+      if (id && seenMessageIds.has(id)) return;
+      if (id) seenMessageIds.add(id);
+      const from = msg.sender || '?';
+      const kind = from === me() ? 'mine' : 'theirs';
+      const text = msg.content ?? msg.text ?? '';
+      let html = lineMessage(`${from} · text`, text);
+      if (kind === 'mine') lastMineTurn = appendTurn(kind, html);
+      else { lastMineTurn = null; appendTurn(kind, html); }
+    }
+
+    function showAckTurn() {
+      const ackHtml = lineAck();
+      if (lastMineTurn) appendToTurn(lastMineTurn, ackHtml);
+      else appendTurn('mine', ackHtml);
+    }
+
+    function showSystemTurn(label) {
+      lastMineTurn = null;
+      appendTurn('system', `<div class="bubble">${escapeHtml(label)}</div>`);
+    }
+
+    function handleInbound(msg) {
+      if (msg.type === 'message') {
+        showMessageTurn({
+          id: msg.id,
+          sender: msg.sender,
+          recipient: msg.recipient,
+          content: msg.content ?? msg.text,
+          message_type: msg.message_type || 'text',
+          metadata: msg.metadata,
+          created_at: msg.created_at,
+        });
+        return;
+      }
+      if (msg.type === 'ack') { showAckTurn(); return; }
+      if (msg.type === 'error') {
+        showSystemTurn('error: ' + (msg.message || msg.code || 'unknown'));
+        return;
+      }
+    }
+
+    function playRingtone() {
+      stopRingtone();
+      try {
+        const ctx = new AudioContext();
+        const playBeep = () => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.frequency.value = 440;
+          g.gain.value = 0.15;
+          o.start();
+          o.stop(ctx.currentTime + 0.2);
+        };
+        playBeep();
+        ringTimer = setInterval(playBeep, 1200);
+      } catch (_) { /* visual ring only */ }
+    }
+
+    function stopRingtone() {
+      if (ringTimer) { clearInterval(ringTimer); ringTimer = null; }
+    }
+
+    function showIncomingCall(from, media) {
+      document.getElementById('ringFrom').textContent = from + ' is calling…';
+      document.getElementById('ringMedia').textContent =
+        (media === 'video' ? 'Video' : 'Voice') + ' call';
+      document.getElementById('incomingCall').classList.add('show');
+      playRingtone();
+      setCallStatus('Incoming ' + (media || 'voice') + ' call from ' + from);
+    }
+
+    function hideIncomingCall() {
+      stopRingtone();
+      document.getElementById('incomingCall').classList.remove('show');
+    }
+
+    function sdpInit(sdp) {
+      if (!sdp) return null;
+      if (typeof sdp === 'string') {
+        try {
+          const parsed = JSON.parse(sdp);
+          if (parsed && parsed.type && parsed.sdp) return new RTCSessionDescription(parsed);
+        } catch (_) {
+          return new RTCSessionDescription({ type: 'offer', sdp });
+        }
+      }
+      if (sdp.type && sdp.sdp) return new RTCSessionDescription(sdp);
+      return null;
+    }
+
+    function iceInit(candidate) {
+      if (!candidate) return null;
+      if (candidate instanceof RTCIceCandidate) return candidate;
+      return new RTCIceCandidate(candidate);
+    }
+
+    function isVideoCall() {
+      return activeCallMedia === 'video';
+    }
+
+    function clearVideoElements() {
+      const panel = document.getElementById('videoPanel');
+      const local = document.getElementById('localVideo');
+      const remote = document.getElementById('remoteVideo');
+      panel.classList.remove('show');
+      local.srcObject = null;
+      remote.srcObject = null;
+    }
+
+    function updateVideoPanel() {
+      if (!isVideoCall()) {
+        clearVideoElements();
+        return;
+      }
+      document.getElementById('videoPanel').classList.add('show');
+      attachLocalVideo();
+      attachRemoteVideo();
+    }
+
+    function attachLocalVideo() {
+      if (!isVideoCall() || !localStream) return;
+      const tracks = localStream.getVideoTracks();
+      if (!tracks.length) return;
+      const el = document.getElementById('localVideo');
+      el.srcObject = localStream;
+      el.play().catch(() => {});
+    }
+
+    async function attachRemoteAudio() {
+      const el = document.getElementById('remoteAudio');
+      if (!remoteStream || remoteStream.getAudioTracks().length === 0) return;
+      el.srcObject = remoteStream;
+      el.muted = false;
+      el.volume = 1;
+      try {
+        await el.play();
+        log('remote audio playing');
+      } catch (e) {
+        log('remote audio play blocked — click the audio controls to unmute');
+      }
+    }
+
+    async function attachRemoteVideo() {
+      if (!isVideoCall() || !remoteStream) return;
+      const tracks = remoteStream.getVideoTracks();
+      if (!tracks.length) return;
+      const el = document.getElementById('remoteVideo');
+      document.getElementById('videoPanel').classList.add('show');
+      el.srcObject = remoteStream;
+      try {
+        await el.play();
+        log('remote video playing');
+      } catch (e) {
+        log('remote video play blocked — tap the page or video area');
+      }
+    }
+
+    function bindRemoteTrack(e) {
+      if (!remoteStream) remoteStream = new MediaStream();
+      const track = e.track;
+      const exists = remoteStream.getTracks().some((t) => t.id === track.id);
+      if (!exists) remoteStream.addTrack(track);
+      track.enabled = true;
+      log('remote ' + track.kind + ' track ' + track.id);
+      if (track.kind === 'audio') attachRemoteAudio();
+      else if (track.kind === 'video') attachRemoteVideo();
+    }
+
+    function flushPendingLocalIce() {
+      while (pendingLocalIce.length && callId) {
+        const c = pendingLocalIce.shift();
+        send({ type: 'call_ice', call_id: callId, candidate: c });
+      }
+    }
+
+    async function waitIceGathering(conn, timeoutMs = 4000) {
+      if (conn.iceGatheringState === 'complete') return;
+      await new Promise((resolve) => {
+        const done = () => {
+          conn.removeEventListener('icegatheringstatechange', onChange);
+          resolve();
+        };
+        const onChange = () => {
+          if (conn.iceGatheringState === 'complete') done();
+        };
+        conn.addEventListener('icegatheringstatechange', onChange);
+        setTimeout(done, timeoutMs);
+      });
+    }
+
+    function createPC() {
+      if (pc) pc.close();
+      iceQueue.length = 0;
+      remoteStream = null;
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: document.getElementById('stun').value }],
+      });
+      pc.onicecandidate = (e) => {
+        if (!e.candidate) return;
+        if (!callId) {
+          pendingLocalIce.push(e.candidate);
+          return;
+        }
+        send({ type: 'call_ice', call_id: callId, candidate: e.candidate });
+      };
+      pc.ontrack = (e) => {
+        const tracks = e.streams?.[0]?.getTracks()?.length ? e.streams[0].getTracks() : [e.track];
+        tracks.forEach((track) => bindRemoteTrack({ track }));
+      };
+      pc.oniceconnectionstatechange = () => {
+        log('ice state ' + pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          attachRemoteAudio();
+          attachRemoteVideo();
+        }
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') {
+          setCallStatus('In call');
+          attachRemoteAudio();
+          attachRemoteVideo();
+        }
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          log('pc state ' + pc.connectionState);
+        }
+      };
+      return pc;
+    }
+
+    async function flushIce() {
+      if (!pc || !pc.remoteDescription) return;
+      while (iceQueue.length) {
+        const c = iceQueue.shift();
+        try { await pc.addIceCandidate(c); } catch (e) { log('ice error: ' + e.message); }
+      }
+    }
+
+    async function addIce(candidate) {
+      if (!candidate) return;
+      if (!pc || !pc.remoteDescription) {
+        iceQueue.push(candidate);
+        return;
+      }
+      try { await pc.addIceCandidate(iceInit(candidate)); } catch (e) { log('ice error: ' + e.message); }
+    }
+
+    function endCall(notifyPeer) {
+      if (notifyPeer && callId) send({ type: 'call_hangup', call_id: callId });
+      hideIncomingCall();
+      if (localStream) localStream.getTracks().forEach((t) => t.stop());
+      if (pc) pc.close();
+      pc = null;
+      localStream = null;
+      callId = null;
+      pendingOffer = null;
+      pendingMedia = null;
+      incomingFrom = null;
+      iceQueue.length = 0;
+      pendingLocalIce.length = 0;
+      remoteStream = null;
+      activeCallMedia = null;
+      callState = 'idle';
+      const ra = document.getElementById('remoteAudio');
+      ra.pause();
+      ra.srcObject = null;
+      clearVideoElements();
+      setCallStatus('No active call');
+      setHangupEnabled(false);
+    }
+
+    async function startCall(kind) {
+      if (callState !== 'idle') {
+        showSystemTurn('already in a call');
+        return;
+      }
+      endCall(false);
+      activeCallMedia = kind;
+      callState = 'outgoing';
+      setCallStatus('Calling ' + peer() + '…');
+      setHangupEnabled(true);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: kind === 'video' ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } : false,
+        });
+        localStream = stream;
+        updateVideoPanel();
+        const conn = createPC();
+        stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+        stream.getTracks().forEach((t) => conn.addTrack(t, stream));
+        const offer = await conn.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: kind === 'video',
+        });
+        await conn.setLocalDescription(offer);
+        await waitIceGathering(conn);
+        send({ type: 'call_offer', to: peer(), media: kind, sdp: conn.localDescription });
+        showCallEvent('Calling ' + peer() + ' (' + kind + ')');
+      } catch (e) {
+        showSystemTurn('call failed: ' + e.message);
+        endCall(false);
+      }
+    }
+
+    function onCallOffer(msg) {
+      if (callState !== 'idle') {
+        send({ type: 'call_reject', call_id: msg.call_id });
+        return;
+      }
+      callId = msg.call_id;
+      incomingFrom = msg.from || peer();
+      pendingOffer = msg.sdp;
+      pendingMedia = msg.media || 'voice';
+      callState = 'ringing';
+      showIncomingCall(incomingFrom, pendingMedia);
+      showCallEvent('Incoming ' + pendingMedia + ' call from ' + incomingFrom);
+    }
+
+    async function acceptCall() {
+      if (callState !== 'ringing' || !pendingOffer) return;
+      hideIncomingCall();
+      activeCallMedia = pendingMedia || 'voice';
+      callState = 'connecting';
+      setCallStatus('Connecting…');
+      setHangupEnabled(true);
+      try {
+        const conn = createPC();
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: activeCallMedia === 'video'
+            ? { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+            : false,
+        });
+        localStream = stream;
+        updateVideoPanel();
+        stream.getAudioTracks().forEach((t) => { t.enabled = true; });
+        stream.getTracks().forEach((t) => conn.addTrack(t, stream));
+        await conn.setRemoteDescription(sdpInit(pendingOffer));
+        await flushIce();
+        const answer = await conn.createAnswer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: pendingMedia === 'video',
+        });
+        await conn.setLocalDescription(answer);
+        await waitIceGathering(conn);
+        send({ type: 'call_answer', call_id: callId, sdp: conn.localDescription });
+        callState = 'in-call';
+        setCallStatus('In call with ' + incomingFrom);
+        showCallEvent('Call answered');
+      } catch (e) {
+        log('accept error: ' + e.message);
+        showSystemTurn('accept failed: ' + e.message);
+        send({ type: 'call_reject', call_id: callId });
+        endCall(false);
+      }
+    }
+
+    function rejectCall() {
+      if (callState !== 'ringing') return;
+      hideIncomingCall();
+      if (callId) send({ type: 'call_reject', call_id: callId });
+      showCallEvent('Call declined');
+      endCall(false);
+    }
+
+    async function onCallAnswer(msg) {
+      if (!msg.sdp) return;
+      callId = msg.call_id || callId;
+      try {
+        await pc.setRemoteDescription(sdpInit(msg.sdp));
+        await flushIce();
+        callState = 'in-call';
+        setCallStatus('In call with ' + peer());
+        showCallEvent('Call connected');
+      } catch (e) {
+        log('answer error: ' + e.message);
+        endCall(true);
+      }
+    }
+
+    function onCallReject(msg) {
+      showCallEvent('Call declined' + (msg.reason ? ': ' + msg.reason : ''));
+      endCall(false);
+    }
+
+    function onCallHangup() {
+      showCallEvent('Call ended');
+      endCall(false);
+    }
+
+    async function loadHistory() {
+      if (location.protocol === 'file:') {
+        showSystemTurn('open via http://localhost:8080/testclient.html');
+        return;
+      }
+      const url = historyURL();
+      dbg('GET', url);
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        if (!res.ok) { showSystemTurn('history failed: ' + res.status); return; }
+        const msgs = JSON.parse(text);
+        if (!Array.isArray(msgs)) return;
+        chatEl.innerHTML = '';
+        seenMessageIds.clear();
+        lastMineTurn = null;
+        const ordered = [...msgs].reverse();
+        if (ordered.length === 0) { showSystemTurn('no messages in history'); return; }
+        for (const m of ordered) {
+          showMessageTurn({
+            id: m.id,
+            sender: m.sender,
+            recipient: m.recipient,
+            content: m.content,
+            message_type: m.message_type,
+            metadata: m.metadata,
+            created_at: m.created_at,
+          });
+        }
+        log('loaded ' + msgs.length + ' messages');
+      } catch (e) {
+        showSystemTurn('history error: ' + e.message);
+      }
+    }
+
+    document.getElementById('acceptBtn').onclick = () => acceptCall();
+    document.getElementById('rejectBtn').onclick = () => rejectCall();
+
+    document.getElementById('connectBtn').onclick = () => {
+      if (location.protocol === 'file:') {
+        alert('Open http://localhost:8080/testclient.html');
+        return;
+      }
+      endCall(false);
+      ws = new WebSocket(wsURL());
+      ws.onopen = () => {
+        log('connected');
+        ['sendBtn', 'voiceBtn', 'videoBtn', 'disconnectBtn', 'historyBtn'].forEach((id) => {
+          document.getElementById(id).disabled = false;
+        });
+        loadHistory();
+      };
+      ws.onclose = () => { log('disconnected'); endCall(false); };
+      ws.onmessage = async (ev) => {
+        dbg('<=', ev.data);
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { log('parse error'); return; }
+
+        switch (msg.type) {
+          case 'call_started':
+            callId = msg.call_id;
+            log('call id ' + callId);
+            flushPendingLocalIce();
+            break;
+          case 'call_offer':
+            onCallOffer(msg);
+            break;
+          case 'call_answer':
+            await onCallAnswer(msg);
+            break;
+          case 'call_reject':
+            onCallReject(msg);
+            break;
+          case 'call_hangup':
+            onCallHangup();
+            break;
+          case 'call_ice':
+            await addIce(msg.candidate);
+            break;
+          default:
+            handleInbound(msg);
+        }
+      };
+    };
+
+    document.getElementById('disconnectBtn').onclick = () => ws && ws.close();
+    document.getElementById('historyBtn').onclick = () => loadHistory();
+    document.getElementById('peer').addEventListener('change', () => {
+      if (!document.getElementById('historyBtn').disabled) loadHistory();
+    });
+
+    document.getElementById('sendBtn').onclick = () => {
+      const text = document.getElementById('text').value.trim();
+      if (!text) return;
+      send({ type: 'message', message_type: 'text', to: peer(), text });
+      lastMineTurn = appendTurn('mine', lineMessage('you · text', text));
+      document.getElementById('text').value = '';
+    };
+    document.getElementById('text').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') document.getElementById('sendBtn').click();
+    });
+
+    document.getElementById('voiceBtn').onclick = () => startCall('voice');
+    document.getElementById('videoBtn').onclick = () => startCall('video');
+    document.getElementById('hangupBtn').onclick = () => endCall(true);
+  </script>
+</body>
+</html>
