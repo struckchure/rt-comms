@@ -6,7 +6,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/labstack/echo/v5 v5.1.1
+	github.com/labstack/echo/v5 v5.2.0
 	github.com/samber/do/v2 v2.0.0
 	github.com/spf13/viper v1.21.0
 )
